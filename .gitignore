@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+
+# Aegis local runtime data
+.aegis/
+*.ndjson
+*.db
+session
+rate-limits.json
+
+# Secrets
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
