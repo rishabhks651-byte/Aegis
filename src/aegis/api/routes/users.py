@@ -103,10 +103,14 @@ def set_role(
         raise NotFound(f"User {body.username!r} not found")
     if target.id == current_user.id:
         raise Forbidden("You cannot change your own role")
-    from aegis.rbac import Role
+    from aegis.rbac import AuthorizationError, Role
     valid_roles = {r.value for r in Role}
     if body.role.upper() not in valid_roles:
         raise Forbidden(f"Invalid role {body.role!r}")
+    try:
+        AuthorizationService.require_mfa_for_admin_assignment(target, body.role.upper())
+    except AuthorizationError as e:
+        raise Forbidden(str(e))
     updated = auth.set_user_role(target.id, body.role.upper())
     authz.audit_privileged_action(
         actor_id=current_user.id,

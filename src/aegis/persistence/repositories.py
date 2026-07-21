@@ -119,6 +119,12 @@ class SqlUserRepository:
             created_at=_ensure_tz(model.created_at),
             active=model.active,
             role=model.role,
+            mfa_enabled=model.mfa_enabled,
+            totp_secret=model.totp_secret,
+            totp_confirmed_at=_ensure_tz(model.totp_confirmed_at) if model.totp_confirmed_at else None,
+            last_used_totp_step=model.last_used_totp_step,
+            recovery_codes=tuple(model.recovery_codes or []),
+            recovery_codes_generated_at=_ensure_tz(model.recovery_codes_generated_at) if model.recovery_codes_generated_at else None,
         )
 
 

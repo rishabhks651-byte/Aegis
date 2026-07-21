@@ -81,3 +81,9 @@ def get_upi_id() -> str:
 def get_env_var(name: str, default: str = "") -> str:
     """Safely read an env var with a default."""
     return os.environ.get(name, default).strip()
+
+
+def get_require_mfa_for_admins() -> bool:
+    """Return True when ADMIN users must have MFA enabled."""
+    val = os.environ.get("AEGIS_REQUIRE_MFA_FOR_ADMINS", "").strip().lower()
+    return val in ("1", "true", "yes")

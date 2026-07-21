@@ -17,6 +17,7 @@ from typing import Any
 
 from aegis.audit import AuditStore
 from aegis.models import AuditEvent
+from aegis.settings import get_require_mfa_for_admins
 
 # ---------------------------------------------------------------------------
 # Roles
@@ -189,3 +190,21 @@ class AuthorizationService:
         if user is None:
             return frozenset()
         return frozenset(_ROLE_PERMISSIONS.get(user.role, set()))
+
+    @staticmethod
+    def require_mfa_for_admin_assignment(user: Any, new_role: str) -> None:
+        """Check that MFA is enabled when assigning ADMIN role under policy.
+
+        Raises ``AuthorizationError`` if *new_role* is ADMIN, the policy
+        ``AEGIS_REQUIRE_MFA_FOR_ADMINS`` is active and *user* does not have
+        MFA enabled.
+        """
+        if new_role != Role.ADMIN.value:
+            return
+        if not get_require_mfa_for_admins():
+            return
+        if not getattr(user, "mfa_enabled", False):
+            raise AuthorizationError(
+                f"User {user.id!r} must have MFA enabled before being assigned "
+                f"the ADMIN role (AEGIS_REQUIRE_MFA_FOR_ADMINS is set)"
+            )

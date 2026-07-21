@@ -275,6 +275,51 @@ class EntitlementsResponse(BaseModel):
 # Standard error
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# MFA
+# ---------------------------------------------------------------------------
+
+class MfaStatusResponse(BaseModel):
+    mfa_enabled: bool
+    totp_confirmed_at: datetime | None = None
+    recovery_codes_count: int = 0
+    recovery_codes_generated_at: datetime | None = None
+
+class MfaGenerateResponse(BaseModel):
+    secret: str
+    provisioning_uri: str
+
+class MfaConfirmRequest(BaseModel):
+    code: str = Field(..., min_length=1)
+
+class MfaSetupConfirmRequest(BaseModel):
+    code: str = Field(..., min_length=1)
+
+class MfaVerifyRequest(BaseModel):
+    pending_mfa_token: str = Field(..., min_length=1)
+    code: str = Field(..., min_length=1)
+
+class MfaRecoveryRequest(BaseModel):
+    pending_mfa_token: str = Field(..., min_length=1)
+    recovery_code: str = Field(..., min_length=1)
+
+class MfaRecoveryCodesResponse(BaseModel):
+    codes: list[str]
+    message: str = "Store these codes securely. They will not be shown again."
+
+class MfaLoginResponse(BaseModel):
+    mfa_required: bool = True
+    pending_mfa_token: str
+    message: str = "MFA code required"
+
+class MfaDisableResponse(BaseModel):
+    mfa_enabled: bool = False
+    message: str = "MFA disabled"
+
+# ---------------------------------------------------------------------------
+# Standard error
+# ---------------------------------------------------------------------------
+
 class ErrorResponse(BaseModel):
     detail: str
     code: str = "error"

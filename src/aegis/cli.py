@@ -42,6 +42,15 @@ def main() -> None:
     auth_sub = auth_p.add_subparsers(dest="auth_command")
     auth_sub.add_parser("whoami", help="Show the current authenticated user")
     auth_sub.add_parser("permissions", help="Show your permissions")
+    mfa_p = auth_sub.add_parser("mfa", help="Manage multi-factor authentication")
+    mfa_sub = mfa_p.add_subparsers(dest="mfa_command")
+    mfa_sub.add_parser("status", help="Show MFA status")
+    mfa_enable_p = mfa_sub.add_parser("enable", help="Generate a new TOTP secret and enable MFA")
+    mfa_enable_p.add_argument("--username", default=None, help="Username (for provisioning URI)")
+    mfa_confirm_p = mfa_sub.add_parser("confirm", help="Confirm MFA setup with a TOTP code")
+    mfa_confirm_p.add_argument("code", help="TOTP code from your authenticator app")
+    mfa_sub.add_parser("disable", help="Disable MFA")
+    mfa_sub.add_parser("regenerate-recovery-codes", help="Generate new recovery codes")
 
     # --- user ---
     user_p = sub.add_parser("user", help="Manage user accounts")
@@ -376,6 +385,12 @@ def _handle_user_role_set(auth: "Authenticator", args: argparse.Namespace, data_
     if role not in valid_roles:
         AegisError(f"Invalid role {role!r}. Valid roles: {sorted(valid_roles)}", ErrorCode.INVALID_ROLE).exit()
 
+    # Enforce admin MFA policy
+    try:
+        AuthorizationService.require_mfa_for_admin_assignment(target, role)
+    except AuthorizationError as e:
+        AegisError(str(e), ErrorCode.PERMISSION_DENIED).exit()
+
     updated = auth.set_user_role(target.id, role)
     authz.audit_privileged_action(
         actor_id=user.id,
@@ -390,7 +405,24 @@ def _handle_user_role_set(auth: "Authenticator", args: argparse.Namespace, data_
 
 def _handle_login(auth: "Authenticator", args: argparse.Namespace) -> None:
     password = getpass.getpass("Password: ")
-    session, raw_token = auth.login(args.username, password)
+    session, raw_token, pending_mfa_token = auth.login_mfa_aware(args.username, password)
+    if pending_mfa_token:
+        auth.save_pending_mfa_token(pending_mfa_token)
+        print(f"Password correct. MFA is required for {args.username!r}.")
+        totp_code = getpass.getpass("TOTP code (or 'recovery' to use a recovery code): ")
+        try:
+            if totp_code.strip().lower() == "recovery":
+                recovery_code = getpass.getpass("Recovery code: ")
+                session, raw_token = auth.verify_recovery_and_create_session(pending_mfa_token, recovery_code)
+            else:
+                session, raw_token = auth.verify_totp_and_create_session(pending_mfa_token, totp_code)
+        except ValueError as e:
+            auth.clear_pending_mfa_token()
+            AegisError(str(e), ErrorCode.AUTH_FAILED).exit()
+        auth.clear_pending_mfa_token()
+        auth.save_session_token(raw_token)
+        print(f"Logged in as {args.username!r}")
+        return
     auth.save_session_token(raw_token)
     print(f"Logged in as {args.username!r}")
 
@@ -1020,8 +1052,92 @@ def _handle_auth(auth: "Authenticator", args: argparse.Namespace, data_dir: str)
         else:
             print("  (none)")
 
+    elif args.auth_command == "mfa":
+        _handle_mfa(auth, args, data_dir)
+
     else:
-        AegisError("Usage: aegis auth whoami|permissions", ErrorCode.INVALID_INPUT).exit()
+        AegisError("Usage: aegis auth whoami|permissions|mfa", ErrorCode.INVALID_INPUT).exit()
+
+
+def _handle_mfa(auth: "Authenticator", args: argparse.Namespace, data_dir: str) -> None:
+    from aegis.rbac import AuthorizationService
+
+    if args.mfa_command == "status":
+        user = _require_auth(auth)
+        print(f"MFA enabled:      {user.mfa_enabled}")
+        if user.totp_confirmed_at:
+            print(f"TOTP confirmed:   {user.totp_confirmed_at.isoformat()}")
+        else:
+            print("TOTP confirmed:   No")
+        print(f"Recovery codes:   {len(user.recovery_codes)} remaining")
+        if user.recovery_codes_generated_at:
+            print(f"Codes generated:  {user.recovery_codes_generated_at.isoformat()}")
+
+    elif args.mfa_command == "enable":
+        user = _require_auth(auth)
+        if user.mfa_enabled:
+            AegisError("MFA is already enabled. Disable it first to reconfigure.", ErrorCode.CONFLICT).exit()
+
+        username = args.username or user.username
+        secret, uri = auth.generate_totp_secret(username)
+        auth.enable_mfa(user.id, user.password_hash, secret)
+
+        print(f"MFA setup initiated for {username!r}")
+        print()
+        print("Scan the following URI with your authenticator app (e.g. Google Authenticator):")
+        print(f"  {uri}")
+        print()
+        print(f"Or enter the secret key manually: {secret}")
+        print()
+        print("Then run 'aegis auth mfa confirm <code>' with a TOTP code from your app.")
+        print("We recommend also running 'aegis auth mfa regenerate-recovery-codes' after confirming.")
+
+    elif args.mfa_command == "confirm":
+        user = _require_auth(auth)
+        if user.mfa_enabled:
+            AegisError("MFA is already enabled.", ErrorCode.CONFLICT).exit()
+        if not user.totp_secret:
+            AegisError("No TOTP secret found. Run 'aegis auth mfa enable' first.", ErrorCode.INVALID_INPUT).exit()
+
+        try:
+            updated = auth.confirm_mfa(user.id, args.code)
+        except ValueError as e:
+            AegisError(str(e), ErrorCode.INVALID_INPUT).exit()
+
+        print("MFA enabled successfully!")
+
+        # Generate recovery codes automatically
+        _, raw_codes = auth.regenerate_recovery_codes(user.id)
+        print()
+        print("Recovery codes generated. Store these securely:")
+        for i, code in enumerate(raw_codes, 1):
+            print(f"  {i}. {code}")
+        print()
+        print("Each code can be used once if you lose access to your authenticator app.")
+
+    elif args.mfa_command == "disable":
+        user = _require_auth(auth)
+        if not user.mfa_enabled:
+            AegisError("MFA is not enabled.", ErrorCode.INVALID_INPUT).exit()
+
+        auth.disable_mfa(user.id)
+        print("MFA disabled.")
+
+    elif args.mfa_command == "regenerate-recovery-codes":
+        user = _require_auth(auth)
+        if not user.mfa_enabled:
+            AegisError("MFA is not enabled. Enable MFA first.", ErrorCode.INVALID_INPUT).exit()
+
+        _, raw_codes = auth.regenerate_recovery_codes(user.id)
+        print("New recovery codes generated. Store these securely:")
+        for i, code in enumerate(raw_codes, 1):
+            print(f"  {i}. {code}")
+        print()
+        print("Previous recovery codes are no longer valid.")
+        print("Each code can be used once if you lose access to your authenticator app.")
+
+    else:
+        AegisError("Usage: aegis auth mfa status|enable|confirm|disable|regenerate-recovery-codes", ErrorCode.INVALID_INPUT).exit()
 
 
 def _handle_admin(auth: "Authenticator", args: argparse.Namespace, data_dir: str) -> None:

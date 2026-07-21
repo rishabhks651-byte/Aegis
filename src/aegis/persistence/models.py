@@ -23,6 +23,12 @@ class UserModel(Base):
     role = Column(String(32), nullable=False, default="USER")
     active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), nullable=False)
+    mfa_enabled = Column(Boolean, nullable=False, default=False)
+    totp_secret = Column(String(512), nullable=True)
+    totp_confirmed_at = Column(DateTime(timezone=True), nullable=True)
+    last_used_totp_step = Column(Integer, nullable=True)
+    recovery_codes = Column(JsonType, nullable=False, default=list)
+    recovery_codes_generated_at = Column(DateTime(timezone=True), nullable=True)
 
 
 class SessionModel(Base):

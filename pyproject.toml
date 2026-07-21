@@ -7,7 +7,7 @@ name = "aegis"
 version = "0.1.0"
 description = "A security gateway for AI and software agents"
 requires-python = ">=3.10"
-dependencies = ["bcrypt>=4.0", "pyyaml>=6.0", "fastapi>=0.110", "uvicorn[standard]>=0.29"]
+dependencies = ["bcrypt>=4.0", "pyyaml>=6.0", "fastapi>=0.110", "uvicorn[standard]>=0.29", "pyotp>=2.9", "cryptography>=41.0"]
 license = {text = "MIT"}
 authors = [
     {name = "Aegis Contributors"},

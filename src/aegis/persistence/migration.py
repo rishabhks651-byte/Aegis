@@ -108,6 +108,12 @@ def migrate(data_dir: str, rebuild: bool = False) -> MigrationResult:
                         role=user.role,
                         active=user.active,
                         created_at=user.created_at,
+                        mfa_enabled=user.mfa_enabled,
+                        totp_secret=user.totp_secret,
+                        totp_confirmed_at=user.totp_confirmed_at,
+                        last_used_totp_step=user.last_used_totp_step,
+                        recovery_codes=list(user.recovery_codes),
+                        recovery_codes_generated_at=user.recovery_codes_generated_at,
                     )
                     session.add(model)
                     result.users += 1

@@ -30,6 +30,7 @@ class ErrorCode(enum.IntEnum):
     SESSION_EXPIRED = 11
     AUTH_FAILED = 12
     PASSWORDS_DO_NOT_MATCH = 13
+    MFA_REQUIRED = 14
 
     # Authorization (20–29)
     PERMISSION_DENIED = 20
