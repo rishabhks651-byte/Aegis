@@ -3,7 +3,7 @@
 ## Development setup
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/rishabhks651-byte/Aegis.git 
 cd Aegis
 python -m venv .venv
 source .venv/bin/activate   # or .venv\Scripts\activate on Windows

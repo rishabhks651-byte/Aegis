@@ -100,7 +100,7 @@ any layer produces a DENY decision.
 ## Quick Start
 
 ```bash
-git clone https://github.com/rishabhks651-byte/Aegis
+git clone https://github.com/rishabhks651-byte/Aegis.git
 cd Aegis
 python -m venv .venv
 ```
